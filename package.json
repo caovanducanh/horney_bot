@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "horney_bot",
   "version": "1.0.0",
   "description": "Discord bot for Zeabur deployment",
@@ -7,13 +7,20 @@
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
-  "keywords": ["discord", "bot", "zeabur"],
+  "keywords": [
+    "discord",
+    "bot",
+    "zeabur"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cheerio": "^1.1.0",
     "discord.js": "^14.21.0",
     "dotenv": "^17.2.1",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
+    "puppeteer": "^24.15.0"
   },
   "engines": {
     "node": ">=18.0.0"
