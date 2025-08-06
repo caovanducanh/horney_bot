@@ -60,15 +60,6 @@ class DiscordService {
                 embed.setImage(video.image);
             }
 
-            // Add additional fields for better presentation
-            if (video.videoCode) {
-                embed.addFields({
-                    name: '📋 Video Code',
-                    value: `\`${video.videoCode}\``,
-                    inline: true
-                });
-            }
-
             const message = await this.channel.send({ embeds: [embed] });
             console.log(`✅ Đã gửi embed: ${video.title} (${video.videoCode || 'No code'}) - ${video.url}`);
             return true;
