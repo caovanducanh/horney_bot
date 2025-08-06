@@ -143,15 +143,26 @@ class DetailedCrawler {
                                 // Skip if no href or not a valid video URL
                                 if (!href) continue;
                                 
-                                // Check if it's a valid JAV video URL
-                                const isValidJAV = href.match(/\/(?:vi|en)\/([A-Z]{2,}-?\d{3,}|fc2-ppv-\d{6,}|\w+\d+)/i);
-                                if (!isValidJAV) continue;
+                                // Check if it's a valid JAV video URL - flexible check
+                                if (!href.includes('/vi/') && !href.includes('/en/')) continue;
+                                if (href.length < 15) continue; // Too short to be a video URL
                                 
-                                // Extract video code from URL (more robust extraction)
-                                let videoCode = '';
-                                const codeMatch = href.match(/\/(?:vi|en)\/([A-Z]{2,}-?\d{3,}|fc2-ppv-\d{6,}|[A-Z]{2,}\d{3,}|\w+\d+)/i);
-                                if (codeMatch) {
-                                    videoCode = codeMatch[1].toUpperCase().replace(/FC2-PPV-/i, 'FC2-PPV-');
+                                // Extract video code from URL - flexible extraction
+                                let videoCode = 'HOT-VIDEO';
+                                const codePatterns = [
+                                    /\/(?:vi|en)\/([A-Z]{2,}-?\d{3,})/i,
+                                    /\/(?:vi|en)\/(fc2-ppv-\d{6,})/i, 
+                                    /\/(?:vi|en)\/([A-Z]{2,}\d{3,})/i,
+                                    /\/(?:vi|en)\/(\w+\d+)/i,
+                                    /\/(?:vi|en)\/([^\/\?#]+)/i // Fallback: any path segment
+                                ];
+                                
+                                for (const pattern of codePatterns) {
+                                    const match = href.match(pattern);
+                                    if (match && match[1]) {
+                                        videoCode = match[1].toUpperCase().replace(/FC2-PPV-/i, 'FC2-PPV-');
+                                        break;
+                                    }
                                 }
                                 
                                 // Get detailed information
@@ -174,20 +185,44 @@ class DetailedCrawler {
                                     }
                                 }
                                 
-                                // Additional title extraction from text content
-                                if (!title) {
-                                    const textElement = element.querySelector('.text-secondary') ||
-                                                       element.querySelector('.title') ||
-                                                       element.querySelector('h3') ||
-                                                       element.querySelector('.video-title');
-                                    if (textElement) {
-                                        title = textElement.textContent.trim();
+                                // Additional title extraction from text content and other sources
+                                if (!title || title.length < 5) {
+                                    const textElements = [
+                                        element.querySelector('.text-secondary'),
+                                        element.querySelector('.title'),
+                                        element.querySelector('h3'),
+                                        element.querySelector('.video-title'),
+                                        element.querySelector('p'),
+                                        element.parentElement?.querySelector('.text-secondary'),
+                                        element.parentElement?.querySelector('.title')
+                                    ];
+                                    
+                                    for (const textElement of textElements) {
+                                        if (textElement && textElement.textContent.trim().length > 5) {
+                                            title = textElement.textContent.trim();
+                                            break;
+                                        }
                                     }
                                 }
                                 
-                                // Use video code as title if no better title found
+                                // Try to extract title from nearby elements
+                                if (!title || title.length < 5) {
+                                    const siblings = element.parentElement?.children || [];
+                                    for (const sibling of siblings) {
+                                        const text = sibling.textContent?.trim();
+                                        if (text && text.length > 10 && !text.includes('http') && !text.match(/^\d+$/)) {
+                                            title = text;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // Use video code as fallback if no proper title found
                                 if (!title || title.length < 3) {
                                     title = videoCode;
+                                } else if (title === videoCode) {
+                                    // If title is just the code, try to make it more descriptive
+                                    title = `${videoCode} - Hot JAV Video`;
                                 }
                                 
                                 // Build full URL
@@ -227,13 +262,32 @@ class DetailedCrawler {
                         
                         console.log(`🎬 Getting details for: ${selected.videoCode}`);
                         
+                        // Try to get more detailed info from the video page
+                        let detailedInfo = { title: null, image: null };
+                        try {
+                            detailedInfo = await this.getVideoDetails(page, selected.url);
+                        } catch (detailError) {
+                            console.log('❌ Could not get detailed info, using basic info');
+                        }
+                        
+                        // Create a better title
+                        let finalTitle = selected.title;
+                        if (detailedInfo.title && detailedInfo.title.length > 10 && 
+                            !detailedInfo.title.includes('missav') && 
+                            detailedInfo.title !== selected.videoCode) {
+                            finalTitle = detailedInfo.title;
+                        } else if (finalTitle === selected.videoCode || finalTitle.length < 10) {
+                            // Create a more descriptive title
+                            finalTitle = `${selected.videoCode} - Hot JAV Video`;
+                        }
+                        
                         // Enhance the selected video info
                         const enhancedVideo = {
-                            title: selected.title,
+                            title: finalTitle,
                             videoCode: selected.videoCode,
                             url: selected.url,
-                            image: selected.image,
-                            fullTitle: `${selected.title} (${selected.videoCode})`
+                            image: detailedInfo.image || selected.image,
+                            fullTitle: finalTitle.includes(selected.videoCode) ? finalTitle : `${finalTitle} (${selected.videoCode})`
                         };
                         
                         const loadTime = Date.now() - startTime;
@@ -257,6 +311,100 @@ class DetailedCrawler {
         } catch (error) {
             console.error('❌ Optimized Puppeteer error:', error.message);
             return null;
+        }
+    }
+
+    /**
+     * Get detailed information from video page
+     */
+    async getVideoDetails(page, videoUrl) {
+        try {
+            console.log('📖 Getting detailed info from video page...');
+            
+            // Go to the video page
+            await page.goto(videoUrl, { 
+                waitUntil: 'domcontentloaded', 
+                timeout: 15000 
+            });
+            
+            // Wait a bit for content to load
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Extract detailed information
+            const details = await page.evaluate(() => {
+                let title = '';
+                let image = '';
+                
+                // Try multiple selectors for title - more specific ones first
+                const titleSelectors = [
+                    '.video-meta h1',
+                    '.video-info h1', 
+                    '.content h1',
+                    '[class*="video"] h1',
+                    'h1.title',
+                    '.video-title',
+                    '.main-title',
+                    'h1:not([class*="site"]):not([class*="logo"])',
+                    'h2:not([class*="site"]):not([class*="logo"])'
+                ];
+                
+                for (const selector of titleSelectors) {
+                    const element = document.querySelector(selector);
+                    if (element && element.textContent.trim().length > 5) {
+                        const text = element.textContent.trim();
+                        // Skip if it's just the site name or too generic
+                        if (!text.includes('missav') && !text.includes('MissAV') && 
+                            text.length > 10 && !text.match(/^[\d\s]+$/)) {
+                            title = text;
+                            break;
+                        }
+                    }
+                }
+                
+                // If no good title found, try meta description
+                if (!title) {
+                    const metaDesc = document.querySelector('meta[name="description"]');
+                    if (metaDesc) {
+                        const desc = metaDesc.getAttribute('content');
+                        if (desc && desc.length > 20 && !desc.includes('missav')) {
+                            title = desc.length > 100 ? desc.substring(0, 100) + '...' : desc;
+                        }
+                    }
+                }
+                
+                // Try to get a better quality image
+                const imageSelectors = [
+                    '.video-poster img',
+                    '.poster img',
+                    '.video-thumbnail img',
+                    'meta[property="og:image"]',
+                    'img[src*="covers"]',
+                    'img[src*="poster"]'
+                ];
+                
+                for (const selector of imageSelectors) {
+                    const element = document.querySelector(selector);
+                    if (element) {
+                        if (element.tagName === 'META') {
+                            image = element.getAttribute('content');
+                        } else {
+                            image = element.getAttribute('src') || 
+                                   element.getAttribute('data-src') ||
+                                   element.getAttribute('data-original');
+                        }
+                        if (image) break;
+                    }
+                }
+                
+                return { title, image };
+            });
+            
+            console.log(`📖 Detailed title: ${details.title || 'Not found'}`);
+            return details;
+            
+        } catch (error) {
+            console.log('❌ Could not get detailed info:', error.message);
+            return { title: null, image: null };
         }
     }
 

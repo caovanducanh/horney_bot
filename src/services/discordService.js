@@ -1,13 +1,11 @@
 const { EmbedBuilder } = require('discord.js');
 const CrawlerService = require('./crawlerService');
-const DetailedCrawler = require('./detailedCrawler');
 const CONFIG = require('../config/constants');
 
 class DiscordService {
     constructor(client) {
         this.client = client;
         this.crawler = new CrawlerService();
-        this.detailedCrawler = new DetailedCrawler();
         this.channel = null;
         this.autoSendInterval = null;
     }
@@ -34,14 +32,20 @@ class DiscordService {
         }
 
         try {
+            // Prepare title - ensure it's descriptive
+            let displayTitle = video.title;
+            if (video.videoCode && !displayTitle.includes(video.videoCode)) {
+                displayTitle = `${displayTitle} (${video.videoCode})`;
+            }
+            
             // Create detailed embed with video information
             const embed = new EmbedBuilder()
-                .setTitle(`${video.title}`)
+                .setTitle(displayTitle)
                 .setURL(video.url)
                 .setColor(CONFIG.COLORS.PRIMARY)
                 .setDescription(`🔥 **Phim HOT ngẫu nhiên từ MissAV** 🔥
 
-🎬 **Mã phim:** \`${video.videoCode || 'N/A'}\`
+📋 **Mã phim:** \`${video.videoCode || 'N/A'}\`
 🔞 *Chỉ dành cho người trên 18 tuổi*
 
 ⚡ *Click vào tiêu đề để xem video*`)
@@ -92,18 +96,19 @@ class DiscordService {
         try {
             console.log('🎲 Đang lấy video random...');
             
-            // Try detailed crawler first
-            let video = await this.detailedCrawler.getRandomHotVideo();
-            
-            // Fallback to regular crawler if detailed crawler fails
-            if (!video) {
-                console.log('🔄 Detailed crawler failed, trying regular crawler...');
-                video = await this.crawler.getRandomHotVideo();
-            }
+            // Use only regular crawler with Puppeteer bypass (most reliable)
+            const video = await this.crawler.getRandomHotVideo();
             
             if (!video) {
                 console.log('❌ Không lấy được video');
                 return false;
+            }
+
+            // Validate result - reject bad URLs
+            if (video.url.includes('/genres') || video.url.includes('/vip') || 
+                video.url.includes('/makers') || video.url.includes('/categories')) {
+                console.log('⚠️ Bad URL detected, trying again...');
+                return await this.sendRandomVideo(); // Retry once
             }
 
             return await this.sendVideoMessage(video);
@@ -154,6 +159,7 @@ class DiscordService {
             console.log(`🎬 ${message.author.tag} yêu cầu link video hot random`);
             await message.reply(CONFIG.MESSAGES.SEARCHING);
             
+            // Use the same method as auto sending to ensure consistent format
             const success = await this.sendRandomVideo();
             if (!success) {
                 await message.channel.send(CONFIG.MESSAGES.ERROR);
@@ -167,9 +173,6 @@ class DiscordService {
     // Cleanup resources when shutting down
     async cleanup() {
         this.stopAutoSending();
-        if (this.detailedCrawler) {
-            await this.detailedCrawler.cleanup();
-        }
         if (this.crawler && this.crawler.closeBrowser) {
             await this.crawler.closeBrowser();
         }
