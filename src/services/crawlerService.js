@@ -38,26 +38,30 @@ class CrawlerService {
     }
 
     /**
-     * Extract videos from page (ultra optimized)
+     * Extract videos from page (ultra optimized v2)
      */
     async extractVideosFromPage(page) {
         return await page.evaluate(() => {
             const videoElements = [];
+            
+            // Smart selectors - prioritize elements with images and text
             const selectors = [
-                'a[href*="/vi/"]:has(img)',
+                'a[href*="/vi/"]:has(img):has(.text-secondary)',  // Best: has image + description
+                'a[href*="/dm18/vi/"]:has(img):has(.text-secondary)',
+                'a[href*="/vi/"]:has(img)',  // Fallback: just has image
                 'a[href*="/dm18/vi/"]:has(img)',
-                '.thumbnail a',
+                '.thumbnail a:has(img)',
                 '.group a:has(img)'
             ];
             
             for (const selector of selectors) {
                 const elements = document.querySelectorAll(selector);
                 
-                for (let i = 0; i < Math.min(elements.length, 8); i++) {
+                for (let i = 0; i < Math.min(elements.length, 6); i++) {
                     const element = elements[i];
                     let href = element.getAttribute('href');
                     
-                    // Skip invalid URLs
+                    // Skip invalid URLs fast
                     if (!href || !href.includes('/vi/') || 
                         href.includes('/genres') || href.includes('/vip') || 
                         href.includes('/makers') || href.includes('/categories')) {
@@ -70,19 +74,53 @@ class CrawlerService {
                     
                     const videoCode = codeMatch[1].toUpperCase();
                     
-                    // Get image and title
-                    const img = element.querySelector('img');
-                    let title = videoCode; // Default to code
-                    let image = '';
+                    // Smart title extraction - get REAL title, not just code
+                    let realTitle = '';
                     
-                    if (img) {
-                        // Try to get better title from alt
-                        const altText = img.getAttribute('alt') || '';
-                        if (altText && altText.length > videoCode.length) {
-                            title = altText;
+                    // Priority 1: Description text (most likely actual title)
+                    const descText = element.querySelector('.text-secondary, .title, .video-title');
+                    if (descText && descText.textContent.trim()) {
+                        const text = descText.textContent.trim();
+                        if (text.length > videoCode.length && !text.includes('http')) {
+                            realTitle = text;
                         }
-                        
-                        // Get image source
+                    }
+                    
+                    // Priority 2: Image alt text (often has good titles)
+                    if (!realTitle) {
+                        const img = element.querySelector('img');
+                        if (img) {
+                            const altText = img.getAttribute('alt') || img.getAttribute('title') || '';
+                            if (altText && altText.length > videoCode.length && 
+                                !altText.toLowerCase().includes('thumbnail') &&
+                                !altText.toLowerCase().includes('image')) {
+                                realTitle = altText;
+                            }
+                        }
+                    }
+                    
+                    // Priority 3: Any nearby text content
+                    if (!realTitle) {
+                        const textElements = element.querySelectorAll('span, p, div');
+                        for (const textEl of textElements) {
+                            const text = textEl.textContent.trim();
+                            if (text && text.length > 10 && text.length < 100 && 
+                                !text.includes(videoCode) && !text.includes('http')) {
+                                realTitle = text;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Fallback: Use a descriptive default
+                    if (!realTitle || realTitle === videoCode) {
+                        realTitle = 'Hot JAV Video';
+                    }
+                    
+                    // Get image
+                    const img = element.querySelector('img');
+                    let image = '';
+                    if (img) {
                         image = img.getAttribute('data-src') || 
                                img.getAttribute('src') || 
                                img.getAttribute('data-original') || '';
@@ -90,9 +128,9 @@ class CrawlerService {
                     
                     const fullUrl = href.startsWith('http') ? href : `https://missav.ws${href}`;
                     
-                    if (videoCode && fullUrl) {
+                    if (realTitle && videoCode && fullUrl) {
                         videoElements.push({
-                            title: `🔥 ${title}`,
+                            title: realTitle.substring(0, 100), // Limit length
                             videoCode: videoCode,
                             url: fullUrl,
                             image: image
@@ -100,7 +138,7 @@ class CrawlerService {
                     }
                 }
                 
-                if (videoElements.length >= 5) break;
+                if (videoElements.length >= 4) break; // Enough for good selection
             }
             
             return videoElements;
@@ -119,7 +157,7 @@ class CrawlerService {
     }
 
     /**
-     * Get random hot video using Puppeteer bypass (super optimized)
+     * Get random hot video using Puppeteer bypass (lightning fast v2)
      */
     async getRandomHotVideoWithPuppeteer() {
         try {
@@ -127,42 +165,44 @@ class CrawlerService {
             const browser = await this.initBrowser();
             const page = await browser.newPage();
             
-            // Ultra fast settings
+            // Lightning fast settings
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
             await page.setViewport({ width: 1280, height: 720 });
             
-            // Disable images/css to speed up
+            // Block everything except HTML to maximize speed
             await page.setRequestInterception(true);
             page.on('request', (req) => {
-                if (req.resourceType() === 'stylesheet' || req.resourceType() === 'font') {
+                const resourceType = req.resourceType();
+                if (resourceType === 'stylesheet' || resourceType === 'font' || 
+                    resourceType === 'image' || resourceType === 'media') {
                     req.abort();
                 } else {
                     req.continue();
                 }
             });
             
-            const urls = ['https://missav.ws/dm18/vi', 'https://missav.ws/vi/new', 'https://missav.ws/vi'];
+            // Try fastest URLs first
+            const urls = ['https://missav.ws/dm18/vi', 'https://missav.ws/vi'];
             
             for (const url of urls) {
                 try {
                     console.log(`🚀 Trying: ${url}`);
                     await page.goto(url, { 
-                        waitUntil: 'networkidle2', 
-                        timeout: 25000  // Reduced timeout
+                        waitUntil: 'domcontentloaded', 
+                        timeout: 20000  // Reduced to 20s max
                     });
                     
-                    // Quick bypass wait
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    // Ultra quick bypass wait
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     const videos = await this.extractVideosFromPage(page);
+                    console.log(`📋 Found ${videos.length} videos`);
                     
                     if (videos.length > 0) {
                         const selected = videos[Math.floor(Math.random() * videos.length)];
                         
-                        // Ensure full title with code
-                        if (selected.videoCode && !selected.title.includes(selected.videoCode)) {
-                            selected.title = `🔥 ${selected.videoCode}`;
-                        }
+                        // Add fire emoji to title and ensure it's not just the code
+                        selected.title = `🔥 ${selected.title}`;
                         
                         // Fix image URL
                         if (selected.image && !selected.image.startsWith('http')) {
@@ -171,19 +211,19 @@ class CrawlerService {
                                 `https://missav.ws${selected.image}`;
                         }
                         
-                        console.log(`✅ Found: ${selected.title}`);
+                        console.log(`✅ Found: ${selected.title} (${selected.videoCode})`);
                         await page.close();
                         return selected;
                     }
                     
                 } catch (urlError) {
-                    console.log(`❌ URL failed: ${url}`);
+                    console.log(`❌ URL failed: ${url} - ${urlError.message}`);
                     continue;
                 }
             }
             
             await page.close();
-            console.log('❌ No videos found on any URL');
+            console.log('❌ No videos found');
             return null;
             
         } catch (error) {
