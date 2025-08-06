@@ -9,31 +9,33 @@ const CONFIG = require('../config/constants');
 class CrawlerService {
     constructor() {
         this.lastRequestTime = 0;
-        this.requestDelay = 2000; // Reduced to 2 seconds
+        this.requestDelay = 1000; // Ultra fast - 1 second only
         this.lastVideoUrl = null;
-        this.browser = null;
+        this.browser = null; // Always fresh browser for random videos
     }
     
     /**
-     * Initialize Puppeteer browser
+     * Initialize Puppeteer browser (always fresh for true randomness)
      */
     async initBrowser() {
-        if (!this.browser) {
-            console.log('🚀 Initializing Puppeteer browser...');
-            this.browser = await puppeteer.launch({
-                headless: 'new',
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu'
-                ]
-            });
-            console.log('✅ Puppeteer browser initialized');
-        }
+        // Always create new browser for fresh random results
+        console.log('🚀 Creating fresh browser...');
+        this.browser = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--disable-web-security', // Extra speed
+                '--disable-background-timer-throttling', // Faster JS
+                '--disable-backgrounding-occluded-windows'
+            ]
+        });
+        console.log('✅ Fresh browser ready');
         return this.browser;
     }
 
@@ -152,17 +154,18 @@ class CrawlerService {
         if (this.browser) {
             await this.browser.close();
             this.browser = null;
-            console.log('🔴 Puppeteer browser closed');
+            console.log('🔴 Browser closed - fresh start next time');
         }
     }
 
     /**
-     * Get random hot video using Puppeteer bypass (lightning fast v2)
+     * Get random hot video using Puppeteer bypass (lightning fast - no cache)
      */
     async getRandomHotVideoWithPuppeteer() {
+        let browser = null;
         try {
             await this.rateLimitDelay();
-            const browser = await this.initBrowser();
+            browser = await this.initBrowser();
             const page = await browser.newPage();
             
             // Lightning fast settings
@@ -189,11 +192,11 @@ class CrawlerService {
                     console.log(`🚀 Trying: ${url}`);
                     await page.goto(url, { 
                         waitUntil: 'domcontentloaded', 
-                        timeout: 20000  // Reduced to 20s max
+                        timeout: 15000  // Reduced to 15s max
                     });
                     
-                    // Ultra quick bypass wait
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Ultra quick bypass wait - just 1 second
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     const videos = await this.extractVideosFromPage(page);
                     console.log(`📋 Found ${videos.length} videos`);
@@ -201,7 +204,7 @@ class CrawlerService {
                     if (videos.length > 0) {
                         const selected = videos[Math.floor(Math.random() * videos.length)];
                         
-                        // Add fire emoji to title and ensure it's not just the code
+                        // Add fire emoji to title
                         selected.title = `🔥 ${selected.title}`;
                         
                         // Fix image URL
@@ -213,6 +216,7 @@ class CrawlerService {
                         
                         console.log(`✅ Found: ${selected.title} (${selected.videoCode})`);
                         await page.close();
+                        await browser.close(); // Always close for fresh random
                         return selected;
                     }
                     
@@ -223,10 +227,12 @@ class CrawlerService {
             }
             
             await page.close();
+            await browser.close();
             console.log('❌ No videos found');
             return null;
             
         } catch (error) {
+            if (browser) await browser.close();
             console.error('❌ Bypass failed:', error.message);
             return null;
         }
@@ -237,7 +243,7 @@ class CrawlerService {
         
         if (timeSinceLastRequest < this.requestDelay) {
             const delay = this.requestDelay - timeSinceLastRequest;
-            console.log(`⏳ Rate limiting: waiting ${delay}ms`);
+            // Removed log for cleaner output
             await new Promise(resolve => setTimeout(resolve, delay));
         }
         
@@ -425,12 +431,12 @@ class CrawlerService {
     }
     
     /**
-     * Get random hot video - Ultra optimized
+     * Get random hot video - Ultra optimized (no cache, pure random)
      */
     async getRandomHotVideo() {
         console.log('🔥 Getting random hot video...');
         
-        // Direct Puppeteer bypass (fastest method)
+        // Direct Puppeteer bypass - always fresh for true randomness
         const video = await this.getRandomHotVideoWithPuppeteer();
         if (video) {
             this.lastVideoUrl = video.url;
