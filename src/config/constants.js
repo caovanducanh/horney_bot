@@ -12,11 +12,15 @@ const CONFIG = {
     
     // MissAV URLs - Real working URLs (updated 2025)
     MISSAV_URLS: [
-        'https://missav.ws/dm18/vi',           // Working DM18 Vietnamese
-        'https://missav.ws/vi',                // Working Vietnamese main
-        'https://missav.ws/vi/new',            // Working new releases
-        'https://missav.ws/dm18/vi/hot',       // Working hot DM18
-        'https://missav.ws/vi/hot'             // Working hot main
+        'https://missav.ws/dm13/vi',         // BEST: 29 videos - Highest success
+        'https://missav.ws/dm18/vi',         // GOOD: 23 videos - Very reliable  
+        'https://missav.ws/dm20/vi',         // GOOD: 17 videos - Stable
+        'https://missav.ws/vi',              // GOOD: 17 videos - Main section
+        'https://missav.ws/dm18/vi/new',     // OK: 6 videos - New releases
+        'https://missav.ws/dm18/vi/release', // OK: 7 videos - Latest releases
+        'https://missav.ws/vi/new',          // OK: 6 videos - New Vietnamese
+        'https://missav.ws/dm13/vi/new',     // OK: 6 videos - New DM13
+        'https://missav.ws/vi/release'       // OK: 6 videos - Vietnamese releases
     ],
     
     // Selectors for video elements (updated based on actual HTML structure)
