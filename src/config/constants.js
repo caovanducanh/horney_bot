@@ -10,16 +10,13 @@ const CONFIG = {
     AUTO_SEND_INTERVAL: 5 * 60 * 1000, // 5 minutes in milliseconds
     REQUEST_TIMEOUT: 15000, // 15 seconds
     
-    // MissAV URLs - Try multiple domains and paths
+    // MissAV URLs - Real working URLs (updated 2025)
     MISSAV_URLS: [
-        'https://missav.com/en',               // Original domain
-        'https://missav.com/en/hot',           // Hot section
-        'https://missav.com/en/new',           // New releases
-        'https://missav.com/en/uncensored',    // Uncensored
-        'https://missav.ws/dm18/vi',           // Alternative domain
-        'https://missav.ws/vi/new',            // Recent update
-        'https://missav.ws/vi/release',        // New releases
-        'https://www.missav.com/en'            // With www
+        'https://missav.ws/dm18/vi',           // Working DM18 Vietnamese
+        'https://missav.ws/vi',                // Working Vietnamese main
+        'https://missav.ws/vi/new',            // Working new releases
+        'https://missav.ws/dm18/vi/hot',       // Working hot DM18
+        'https://missav.ws/vi/hot'             // Working hot main
     ],
     
     // Selectors for video elements (updated based on actual HTML structure)
