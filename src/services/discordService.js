@@ -1,11 +1,13 @@
 const { EmbedBuilder } = require('discord.js');
 const CrawlerService = require('./crawlerService');
+const DetailedCrawler = require('./detailedCrawler');
 const CONFIG = require('../config/constants');
 
 class DiscordService {
     constructor(client) {
         this.client = client;
         this.crawler = new CrawlerService();
+        this.detailedCrawler = new DetailedCrawler();
         this.channel = null;
         this.autoSendInterval = null;
     }
@@ -32,31 +34,52 @@ class DiscordService {
         }
 
         try {
+            // Create detailed embed with video information
             const embed = new EmbedBuilder()
-                .setTitle(video.title)
+                .setTitle(`${video.title}`)
                 .setURL(video.url)
                 .setColor(CONFIG.COLORS.PRIMARY)
-                .setDescription('🔥 **Phim HOT ngẫu nhiên từ MissAV** 🔥\n\n🔞 *Chỉ dành cho người trên 18 tuổi*')
+                .setDescription(`🔥 **Phim HOT ngẫu nhiên từ MissAV** 🔥
+
+🎬 **Mã phim:** \`${video.videoCode || 'N/A'}\`
+🔞 *Chỉ dành cho người trên 18 tuổi*
+
+⚡ *Click vào tiêu đề để xem video*`)
                 .setFooter({ 
                     text: `🎲 Random Hot Video | ${new Date().toLocaleString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'})}`,
                     iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png'
                 })
                 .setTimestamp();
 
+            // Add thumbnail image if available
             if (video.image) {
                 embed.setImage(video.image);
             }
 
+            // Add additional fields for better presentation
+            if (video.videoCode) {
+                embed.addFields({
+                    name: '📋 Video Code',
+                    value: `\`${video.videoCode}\``,
+                    inline: true
+                });
+            }
+
             const message = await this.channel.send({ embeds: [embed] });
-            console.log(`✅ Đã gửi: ${video.title}`);
+            console.log(`✅ Đã gửi embed: ${video.title} (${video.videoCode || 'No code'}) - ${video.url}`);
             return true;
         } catch (error) {
             console.error('❌ Lỗi khi gửi embed:', error.message);
             
-            // Fallback: gửi text message
+            // Fallback: gửi text message với thông tin đầy đủ
             try {
-                await this.channel.send(`🔥 **${video.title}**\n🔗 ${video.url}\n🔞 Chỉ dành cho 18+ | Random Hot Video`);
-                console.log(`✅ Đã gửi (text fallback): ${video.title}`);
+                const fallbackMessage = `🔥 **${video.title}**
+📋 **Mã phim:** \`${video.videoCode || 'N/A'}\`
+🔗 **Link:** ${video.url}
+🔞 Chỉ dành cho 18+ | Random Hot Video`;
+
+                await this.channel.send(fallbackMessage);
+                console.log(`✅ Đã gửi (text fallback): ${video.title} (${video.videoCode || 'No code'})`);
                 return true;
             } catch (fallbackError) {
                 console.error('❌ Lỗi cả text fallback:', fallbackError.message);
@@ -68,7 +91,15 @@ class DiscordService {
     async sendRandomVideo() {
         try {
             console.log('🎲 Đang lấy video random...');
-            const video = await this.crawler.getRandomHotVideo();
+            
+            // Try detailed crawler first
+            let video = await this.detailedCrawler.getRandomHotVideo();
+            
+            // Fallback to regular crawler if detailed crawler fails
+            if (!video) {
+                console.log('🔄 Detailed crawler failed, trying regular crawler...');
+                video = await this.crawler.getRandomHotVideo();
+            }
             
             if (!video) {
                 console.log('❌ Không lấy được video');
@@ -130,6 +161,17 @@ class DiscordService {
         } catch (error) {
             console.error('❌ Lỗi khi xử lý lệnh #link:', error.message);
             await message.channel.send(CONFIG.MESSAGES.FALLBACK_ERROR);
+        }
+    }
+
+    // Cleanup resources when shutting down
+    async cleanup() {
+        this.stopAutoSending();
+        if (this.detailedCrawler) {
+            await this.detailedCrawler.cleanup();
+        }
+        if (this.crawler && this.crawler.closeBrowser) {
+            await this.crawler.closeBrowser();
         }
     }
 }
