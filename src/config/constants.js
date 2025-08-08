@@ -4,7 +4,7 @@
 
 const CONFIG = {
     // Discord
-    CHANNEL_ID: '1402562738974363652',  // Original channel ID that was working
+    CHANNEL_ID: '1402697823635640432',  // Original channel ID that was working
     
     // Timing
     AUTO_SEND_INTERVAL: 5 * 60 * 1000, // 5 minutes in milliseconds
